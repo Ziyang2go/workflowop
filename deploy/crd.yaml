@@ -1,0 +1,13 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: workflows.threekit.com
+spec:
+  group: threekit.com
+  names:
+    kind: Workflow
+    listKind: WorkflowList
+    plural: workflows
+    singular: workflow
+  scope: Namespaced
+  version: v1alpha

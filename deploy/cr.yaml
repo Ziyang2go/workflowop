@@ -1,0 +1,4 @@
+apiVersion: "threekit.com/v1alpha"
+kind: "Workflow"
+metadata:
+  name: "example"
