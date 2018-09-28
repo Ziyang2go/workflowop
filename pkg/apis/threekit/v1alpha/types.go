@@ -17,6 +17,7 @@ type WorkflowList struct {
 type Workflow struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
+	Inputs            WorkflowInputs `json:"inputs"`
 	Spec              WorkflowSpec   `json:"spec"`
 	Status            WorkflowStatus `json:"status,omitempty"`
 }
@@ -30,4 +31,14 @@ type WorkflowStatus struct {
 	Status     string `json:"status"`
 	Job1Status string `json:"job1Status"`
 	Job2Status string `json:"job2Status"`
+}
+
+type WorkflowInputs struct {
+	Jobs []Job `json:"jobs"`
+}
+
+type Job struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Data string `json:"data"`
 }

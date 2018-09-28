@@ -4,27 +4,27 @@ import (
 	"context"
 
 	"github.com/Ziyang2go/workflowop/pkg/apis/threekit/v1alpha"
+	operator "github.com/Ziyang2go/workflowop/pkg/workflow"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
-	"github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 )
 
-func NewHandler(workflowop) sdk.Handler {
+func NewHandler(workflowop operator.WorkflowMethod) sdk.Handler {
 	return &Handler{
-		workflowop: workflowop,
+		operator: workflowop,
 	}
 }
 
 type Handler struct {
-	// Fill me
+	operator operator.WorkflowMethod
 }
 
 func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
 	case *v1alpha.Workflow:
-		logrus.Printf("Workflow update %v", o)
+		h.operator.HandleWorkflow(o)
 	case *batchv1.Job:
-		logrus.Printf("Job Update %v", o)
+		h.operator.HandleJob(o)
 	}
 	return nil
 }

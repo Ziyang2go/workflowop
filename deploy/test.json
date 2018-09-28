@@ -1,0 +1,21 @@
+{
+  "apiVersion": "threekit.com/v1alpha",
+  "kind": "Workflow",
+  "metadata": {
+    "name": "test-workflow"
+  },
+  "inputs": {
+    "jobs": [
+      {
+        "name": "testjob1",
+        "type": "render",
+        "data": "testtesttest"
+      },
+      {
+        "name": "testJob2",
+        "type": "import",
+        "data": "test2test2stes"
+      }
+    ]
+  }
+}

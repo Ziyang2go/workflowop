@@ -1,4 +1,23 @@
-apiVersion: "threekit.com/v1alpha"
-kind: "Workflow"
+apiVersion: 'threekit.com/v1alpha'
+kind: 'Workflow'
 metadata:
-  name: "example"
+  name: 'test-workflow'
+inputs: {
+    jobs:
+    [
+      {
+        name: 'testjob1',
+        type: 'render',
+        data:
+          {
+            sceneId: '00000-00000-00000-00000-00000',
+            configuration: { Fabric: 'choice_111', Leg: 'choice_083' },
+          },
+      },
+      {
+        name: 'testJob2',
+        type: 'import',
+        data: { sceneId: '000111-000111-000111-000111' },
+      },
+    ]
+}
