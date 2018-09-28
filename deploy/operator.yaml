@@ -15,17 +15,17 @@ spec:
       serviceAccountName: workflowop
       containers:
         - name: workflowop
-          image: REPLACE_IMAGE
+          image: ziyang2go/workflowop
           ports:
-          - containerPort: 60000
-            name: metrics
+            - containerPort: 60000
+              name: metrics
           command:
-          - workflowop
-          imagePullPolicy: Always
+            - workflowop
+          imagePullPolicy: IfNotPresent
           env:
             - name: WATCH_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: OPERATOR_NAME
-              value: "workflowop"
+              value: 'workflowop'

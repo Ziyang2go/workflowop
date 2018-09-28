@@ -1,0 +1,11 @@
+apiVersion: skaffold/v1alpha2
+kind: Config
+build:
+  artifacts:
+    - imageName: ziyang2go/workflowop
+      docker:
+        dockerfilePath: tmp/build/Dockerfile
+deploy:
+  kubectl:
+    manifests:
+      - deploy/operator.yaml
