@@ -23,7 +23,7 @@ type Workflow struct {
 }
 
 type WorkflowSpec struct {
-	JobBatch map[string]string `json:"jobBatch"`
+	JobBatch map[string]*BatchReference `json:"jobBatch"`
 }
 
 type WorkflowStatus struct {
@@ -39,4 +39,10 @@ type Job struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 	Data string `json:"data"`
+}
+
+type BatchReference struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+	Logs string `json:"logs"`
 }

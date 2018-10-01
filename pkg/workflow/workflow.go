@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 
@@ -34,17 +35,17 @@ func (w *WorkflowOp) HandleWorkflow(o *v1alpha.Workflow) error {
 	batches := o.Spec.JobBatch
 	statuses := o.Status.JobStatus
 	changed := false
+	logrus.Println("handle workflow...")
 	for _, job := range jobs {
 		name := job.Name
 		batchName := o.GetObjectMeta().GetName() + "-" + name
-		if batches[name] != "" {
+		if batches[name] != nil {
 			status := o.Status.JobStatus[name]
 			logrus.Printf("%s job %s is in status %s", job.Type, name, status)
 			continue
 		}
-		logrus.Printf("Creating %s job %s ......", job.Type, name)
 		if batches == nil {
-			batches = make(map[string]string)
+			batches = make(map[string]*v1alpha.BatchReference)
 		}
 		err := w.CreateJob(job.Type, batchName, job.Data, o)
 		if err != nil {
@@ -52,7 +53,8 @@ func (w *WorkflowOp) HandleWorkflow(o *v1alpha.Workflow) error {
 			continue
 		}
 		changed = true
-		batches[name] = o.GetObjectMeta().GetName() + "-" + name
+		jobName := o.GetObjectMeta().GetName() + "-" + name
+		batches[name] = &v1alpha.BatchReference{"Job", jobName, ""}
 		if statuses == nil {
 			statuses = make(map[string]string)
 		}
@@ -120,13 +122,16 @@ func (w *WorkflowOp) HandleJob(job *batchv1.Job) error {
 	finished := job.Status.Succeeded == 1 || job.Status.Failed == 1
 	if finished {
 		statuses := workflow.Status.JobStatus
+		batches := workflow.Spec.JobBatch
 		prefix := workflow.Name + "-"
 		updateName := strings.TrimPrefix(job.Name, prefix)
+		logs := w.GetJobLogs(job)
 		if job.Status.Succeeded == 1 {
 			statuses[updateName] = "ok"
 		} else {
 			statuses[updateName] = "failed"
 		}
+		batches[updateName].Logs = logs
 		err := w.UpdateWorkflow(nil, statuses, "", workflow)
 		if err != nil {
 			logrus.Errorf("Update workflow error %v... ", err)
@@ -153,6 +158,34 @@ func (w *WorkflowOp) CreateJob(jobType, jobName, jobData string, o *v1alpha.Work
 	return nil
 }
 
+func (w *WorkflowOp) GetJobLogs(job *batchv1.Job) string {
+	logrus.Println("GET JOBS LOGS .............")
+
+	podName := job.Spec.Template.ObjectMeta.Name
+	logrus.Printf("%v", job.Spec.Template.GetObjectMeta())
+	logrus.Printf("POD NAME IS .......... %s", podName)
+	pod, err := w.GetPodByName(podName, job.Namespace)
+	if err != nil {
+		logrus.Errorf("failed to get job pod %s", job.Name)
+	}
+	logs := w.GetLogFromPod(pod)
+	return logs
+}
+
+func (w *WorkflowOp) GetLogFromPod(pod *corev1.Pod) string {
+	client := w.provider.GetKubeClient()
+	logOptions := &corev1.PodLogOptions{}
+	req := client.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, logOptions)
+	rc, err := req.Stream()
+	if err != nil {
+		logrus.Errorf("get log error: %v", err)
+	}
+	defer rc.Close()
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(rc)
+	return buf.String()
+}
+
 func (w *WorkflowOp) GetWorkflowByName(name, namspace string) (*v1alpha.Workflow, error) {
 	workflow := &v1alpha.Workflow{
 		TypeMeta: metav1.TypeMeta{
@@ -168,7 +201,7 @@ func (w *WorkflowOp) GetWorkflowByName(name, namspace string) (*v1alpha.Workflow
 	return workflow, err
 }
 
-func (w *WorkflowOp) UpdateWorkflow(batchReferences, batchStatus map[string]string, status string, wf *v1alpha.Workflow) error {
+func (w *WorkflowOp) UpdateWorkflow(batchReferences map[string]*v1alpha.BatchReference, batchStatus map[string]string, status string, wf *v1alpha.Workflow) error {
 	uploadO := wf.DeepCopy()
 	if batchReferences != nil {
 		uploadO.Spec.JobBatch = batchReferences
@@ -219,4 +252,18 @@ func (w *WorkflowOp) GetJobTemplate(jobType, jobName, jobData string, o *v1alpha
 			},
 		},
 	}
+}
+
+func (w *WorkflowOp) GetPodByName(name, namespace string) (*corev1.Pod, error) {
+	pod := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			OwnerReferences:,
+		},
+	}
+	err := w.provider.Get(pod)
+	return pod, err
 }
