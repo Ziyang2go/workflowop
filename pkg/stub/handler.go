@@ -9,14 +9,14 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 )
 
-func NewHandler(workflowop operator.WorkflowMethod) sdk.Handler {
+func NewHandler(workflowop operator.WorkflowOpMethod) sdk.Handler {
 	return &Handler{
 		operator: workflowop,
 	}
 }
 
 type Handler struct {
-	operator operator.WorkflowMethod
+	operator operator.WorkflowOpMethod
 }
 
 func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {

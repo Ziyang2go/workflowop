@@ -23,14 +23,12 @@ type Workflow struct {
 }
 
 type WorkflowSpec struct {
-	Job1Batch string `json:"job1Batch"`
-	Job2Batch string `json:"job2Batch"`
+	JobBatch map[string]string `json:"jobBatch"`
 }
 
 type WorkflowStatus struct {
-	Status     string `json:"status"`
-	Job1Status string `json:"job1Status"`
-	Job2Status string `json:"job2Status"`
+	Status    string            `json:"status"`
+	JobStatus map[string]string `json:"jobStatus"`
 }
 
 type WorkflowInputs struct {
