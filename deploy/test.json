@@ -9,12 +9,12 @@
       {
         "name": "testjob1",
         "type": "render",
-        "data": "testtesttest"
+        "data": "{\"sceneId\":\"000-111-222-333\",\"configuration\":{\"color\":\"red\"},\"version\":5}"
       },
       {
         "name": "testjob2",
         "type": "import",
-        "data": "test2test2stes"
+        "data": "{\"sceneId\":\"000-111-222-333\",\"configuration\":{\"color\":\"red\"},\"version\":5}"
       }
     ]
   }

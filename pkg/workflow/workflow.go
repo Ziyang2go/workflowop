@@ -31,89 +31,96 @@ func NewWorkflowOp(provider kube.Provider) WorkflowOpMethod {
 }
 
 func (w *WorkflowOp) HandleWorkflow(o *v1alpha.Workflow) error {
-	jobs := o.Inputs.Jobs
-	batches := o.Spec.JobBatch
-	statuses := o.Status.JobStatus
+	var err error
+	switch wfStatus := o.Status.Status; wfStatus {
+	case "", "pending":
+		err = w.HandlePendingWf(o)
+	case "working":
+		err = w.HandleWorkingWf(o)
+	case "ok", "failed":
+		err = w.CleanupWf(o)
+	default:
+		logrus.Errorf("unknown workflow status %s", wfStatus)
+	}
+	return err
+}
+
+func (w *WorkflowOp) HandlePendingWf(wf *v1alpha.Workflow) error {
+	jobs := wf.Inputs.Jobs
+	batches := wf.Spec.JobBatch
+	statuses := wf.Status.JobStatus
 	changed := false
-	logrus.Println("handle workflow...")
+	var updateErr error
 	for _, job := range jobs {
 		name := job.Name
-		batchName := o.GetObjectMeta().GetName() + "-" + name
+		batchName := wf.GetObjectMeta().GetName() + "-" + name
 		if batches[name] != nil {
-			status := o.Status.JobStatus[name]
+			status := wf.Status.JobStatus[name]
 			logrus.Printf("%s job %s is in status %s", job.Type, name, status)
 			continue
 		}
 		if batches == nil {
 			batches = make(map[string]*v1alpha.BatchReference)
 		}
-		err := w.CreateJob(job.Type, batchName, job.Data, o)
+		err := w.CreateJob(job.Type, batchName, job.Data, wf)
 		if err != nil {
 			logrus.Errorf("failed to create job for %s: %v", name, err)
 			continue
 		}
 		changed = true
-		jobName := o.GetObjectMeta().GetName() + "-" + name
+		jobName := wf.GetObjectMeta().GetName() + "-" + name
 		batches[name] = &v1alpha.BatchReference{"Job", jobName, ""}
 		if statuses == nil {
 			statuses = make(map[string]string)
 		}
 		statuses[name] = "working"
 	}
+	if changed {
+		updateErr = w.UpdateWorkflow(batches, statuses, "", wf)
+	} else if len(jobs) == len(batches) {
+		updateErr = w.UpdateWorkflow(nil, nil, "working", wf)
+	}
+	if updateErr != nil {
+		logrus.Errorf("Update workflow error %v", updateErr)
+	}
+	return updateErr
+}
 
-	if !changed {
-		shouldUpdate, err := w.shouldUpdateWorkFlow(o)
-		if err != nil {
-			logrus.Errorf("check workflow error %v", err)
-			return err
+func (w *WorkflowOp) HandleWorkingWf(wf *v1alpha.Workflow) error {
+	statuses := wf.Status.JobStatus
+	done := true
+	ok := "ok"
+	for _, status := range statuses {
+		if status != "ok" && status != "failed" {
+			// there are jobs not finished
+			done = false
+			break
 		}
-		if shouldUpdate != "" {
-			updateErr := w.UpdateWorkflow(nil, nil, shouldUpdate, o)
-			if updateErr != nil {
-				logrus.Errorf("Update workflow error %v", updateErr)
-			}
+		if status == "failed" {
+			ok = "failed"
+		}
+	}
+	if done {
+		updateErr := w.UpdateWorkflow(nil, nil, ok, wf)
+		if updateErr != nil {
+			logrus.Errorf("failed to update workflow %v", updateErr)
 			return updateErr
 		}
-		logrus.Println("no update on workflow")
-	} else {
-		updateErr := w.UpdateWorkflow(batches, statuses, "", o)
-		if updateErr != nil {
-			logrus.Errorf("Update workflow error %v", updateErr)
-		}
-		return updateErr
 	}
 	return nil
 }
 
-func (w *WorkflowOp) shouldUpdateWorkFlow(o *v1alpha.Workflow) (string, error) {
-	status := o.Status.Status
-	if status == "ok" || status == "failed" {
-		//Workflow has already finished
-		return "", nil
-	}
-	if status != "working" {
-		return "working", nil
-	}
-	allFinish := true
-	batchStatuses := o.Status.JobStatus
-	for _, v := range batchStatuses {
-		if v != "ok" && v != "failed" {
-			allFinish = false
-			break
-		}
-	}
-	if allFinish {
-		return "ok", nil
-	}
-	return "", nil
-}
-
 func (w *WorkflowOp) HandleJob(job *batchv1.Job) error {
 	logrus.Printf("Handle job %v", job.GetObjectMeta().GetName())
-	wfname := job.GetOwnerReferences()[0].Name
+	owner := job.GetOwnerReferences()[0]
+	if owner.Kind != "Workflow" {
+		return nil
+	}
+	wfname := owner.Name
 	workflow, err := w.GetWorkflowByName(wfname, job.Namespace)
 	if err != nil {
 		logrus.Errorf("could not get owner reference workflow %v", err)
+		return err
 	}
 	status := workflow.Status.JobStatus[job.Name]
 	if status == "ok" || status == "failed" {
@@ -125,7 +132,7 @@ func (w *WorkflowOp) HandleJob(job *batchv1.Job) error {
 		batches := workflow.Spec.JobBatch
 		prefix := workflow.Name + "-"
 		updateName := strings.TrimPrefix(job.Name, prefix)
-		logs := w.GetJobLogs(job)
+		logs := "hello world" //w.GetJobLogs(job)
 		if job.Status.Succeeded == 1 {
 			statuses[updateName] = "ok"
 		} else {
@@ -147,7 +154,7 @@ func (w *WorkflowOp) CreateJob(jobType, jobName, jobData string, o *v1alpha.Work
 		logrus.Errorf("failed to list jobs with %v", err)
 	}
 	logrus.Printf("current  number of jobs is %d ", len(jl.Items))
-	if length := len(jl.Items); length > 100 {
+	if length := len(jl.Items); length > 1000 {
 		return errors.New("job number has limits")
 	}
 	createJobErr := w.provider.Create(jobTemplate)
@@ -260,10 +267,12 @@ func (w *WorkflowOp) GetPodByName(name, namespace string) (*corev1.Pod, error) {
 			Kind:       "Pod",
 			APIVersion: "v1",
 		},
-		ObjectMeta: metav1.ObjectMeta{
-			OwnerReferences:,
-		},
 	}
 	err := w.provider.Get(pod)
 	return pod, err
+}
+
+func (w *WorkflowOp) CleanupWf(workflow *v1alpha.Workflow) error {
+	err := w.provider.Delete(workflow)
+	return err
 }
